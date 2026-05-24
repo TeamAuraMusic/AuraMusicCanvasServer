@@ -1,14 +1,53 @@
+import axios from 'axios';
 import { getCanvases } from '../services/spotifyCanvasService.js';
+import { getToken } from '../services/spotifyAuthService.js';
+
+async function searchTracks(song, artist, album, limit = 5) {
+  try {
+    const accessToken = await getToken();
+
+    let queryParts = [];
+    if (song) queryParts.push(`track:"${song}"`);
+    if (artist) queryParts.push(`artist:"${artist}"`);
+    if (album) queryParts.push(`album:"${album}"`);
+
+    const query = queryParts.join(' ').trim();
+    if (!query) return [];
+
+    const response = await axios.get('https://api.spotify.com/v1/search', {
+      params: {
+        q: query,
+        type: 'track',
+        limit
+      },
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    return response.data?.tracks?.items || [];
+  } catch (err) {
+    console.error('Spotify search error:', err.response?.data || err.message);
+    return [];
+  }
+}
 
 export const fetchCanvas = async (req, res) => {
-  const { trackId, trackIds } = req.query;
+  let { trackId, trackIds, song, artist, album } = req.query;
 
   let ids = [];
   if (trackId) ids.push(trackId);
   if (trackIds) ids = ids.concat(trackIds.split(',').map(s => s.trim()).filter(Boolean));
 
+  // Support simple song + artist query (used by some client paths)
+  if (ids.length === 0 && (song || artist)) {
+    const tracks = await searchTracks(song, artist, album);
+    ids = tracks.map(t => t.id).filter(Boolean);
+  }
+
   if (ids.length === 0) {
-    return res.status(400).json({ error: 'Missing trackId or trackIds parameter' });
+    return res.status(400).json({ error: 'Missing trackId, trackIds, or song+artist parameters' });
   }
 
   const results = [];
