@@ -7,6 +7,15 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Simple health endpoint for keep-warm pings and monitoring
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    service: 'auramusic-canvas-server',
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.use('/api/canvas', canvasRoutes);
 
 app.listen(PORT, function () {

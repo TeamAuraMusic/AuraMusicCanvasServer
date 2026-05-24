@@ -1,0 +1,23 @@
+name: Keep Canvas server warm
+
+# Render's free plan spins the service down after ~15 min of inactivity.
+# Pinging /health every minute keeps the instance warm so the AuraMusic
+# client never sees a cold start.
+
+on:
+  schedule:
+    # Every minute. GitHub Actions cron is best-effort.
+    - cron: "* * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping /health
+        run: |
+          curl -fsS --max-time 120 \
+            -o /dev/null \
+            -w "HTTP %{http_code} in %{time_total}s\n" \
+            https://auramusiccanvasserver.onrender.com/health
