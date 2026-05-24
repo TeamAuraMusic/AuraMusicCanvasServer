@@ -78,9 +78,28 @@ SP_DC=your_sp_dc_cookie_here
 
 ## Deployment
 
-You can deploy instantly with Vercel:
+### Render (recommended)
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTeamAuraMusic%2FAuraMusicCanvasServer%2Ftree%2Fmain&project-name=AuraMusicCanvasServer&repository-name=AuraMusicCanvasServer&env=SP_DC&envDescription=SP_DC%20is%20needed%20for%20this%20for%20authentication%20to%20be%20working%20fine&envLink=https%3A%2F%2Fwww.spotify.com%2F&redirect-url=https%3A%2F%2Fgithub.com%2FTeamAuraMusic%2FAuraMusicCanvasServer)
+1. Fork or use this repo directly on Render.
+2. Create a new **Web Service** connected to this GitHub repo.
+3. Use these settings:
+   - Environment: `Node`
+   - Build Command: `npm install`
+   - Start Command: `npm start`
+4. Add environment variable:
+   - `SP_DC` = your Spotify `sp_dc` cookie value
+
+Or deploy instantly using the button below (after forking the repo):
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/TeamAuraMusic/AuraMusicCanvasServer)
+
+The included `render.yaml` provides the recommended configuration.
+
+---
+
+### Docker (alternative on Render or elsewhere)
+
+Use the included `Dockerfile`. Render will auto-detect it if you choose Docker environment.
 
 ---
 
@@ -99,16 +118,12 @@ https://github.com/bartleyg/my-spotify-canvas
 
 ## License
 
-This project is licensed under the MIT license. see [LICENSE](https://github.com/TeamAuraMusic/AuraMusicCanvasServer/blob/initial/LICENSE) for details.
+This project is licensed under the MIT license. See [LICENSE](https://github.com/TeamAuraMusic/AuraMusicCanvasServer/blob/main/LICENSE) for details.
 
 ---
 
 ## Contact
 
-Telegram: [@paxsenix0](https://t.me/paxsenix0)
-
-Email: alex24dzn@proton.me
-
-My Rest-API website: https://api.paxsenix.biz.id
+Maintained by TeamAuraMusic.
 
 ---

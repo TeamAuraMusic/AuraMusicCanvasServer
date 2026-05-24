@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: auramusic-canvas-server
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: SP_DC
+        sync: false
+        description: Spotify sp_dc cookie for authentication

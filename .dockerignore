@@ -1,0 +1,10 @@
+node_modules
+npm-debug.log
+.env
+.git
+.gitignore
+*.md
+Dockerfile
+.dockerignore
+render.yaml
+vercel.json
