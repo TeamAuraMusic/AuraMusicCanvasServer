@@ -15,6 +15,11 @@ const LATEST_SECRETS = {
 let currentTotp = null;
 let currentTotpVersion = null;
 
+// Token cache keyed by productType so search vs. canvas can hold separate tokens.
+// Tokens are reused until ~60s before Spotify's reported expiry to avoid the
+// otherwise-unavoidable ~300ms TOTP round-trip on every Canvas/search hop.
+const tokenCache = new Map(); // productType -> { token, expiresAt }
+
 function createTotpSecret(data) {
   const mappedData = data.map((value, index) => value ^ ((index % 33) + 9));
   const hexData = Buffer.from(mappedData.join(""), "utf8").toString("hex");
@@ -22,10 +27,9 @@ function createTotpSecret(data) {
 }
 
 function initializeTOTP() {
-  // Use the latest hardcoded secret as primary (more reliable than GitHub fetch)
   const version = "61";
   const secretData = LATEST_SECRETS[version];
-  
+
   if (!secretData) {
     throw new Error("No TOTP secret available");
   }
@@ -38,15 +42,18 @@ function initializeTOTP() {
     secret: totpSecret
   });
   currentTotpVersion = version;
-  
+
   console.log(`[TOTP] Initialized with version ${version}`);
 }
 
 export async function getToken(reason = "init", productType = "mobile-web-player") {
-  // Ensure we have a TOTP instance
-  if (!currentTotp) {
-    initializeTOTP();
+  // Reuse a still-valid cached token if available.
+  const cached = tokenCache.get(productType);
+  if (cached && cached.expiresAt - 60_000 > Date.now()) {
+    return cached.token;
   }
+
+  if (!currentTotp) initializeTOTP();
 
   const localTime = Date.now();
   const serverTime = await getServerTime();
@@ -71,7 +78,10 @@ export async function getToken(reason = "init", productType = "mobile-web-player
     },
   });
 
-  return response.data?.accessToken;
+  const token = response.data?.accessToken;
+  const expiresAt = Number(response.data?.accessTokenExpirationTimestampMs) || (Date.now() + 30 * 60_000);
+  if (token) tokenCache.set(productType, { token, expiresAt });
+  return token;
 }
 
 async function getServerTime() {
@@ -90,17 +100,6 @@ async function getServerTime() {
   } catch {
     return Date.now();
   }
-}
-
-function generateTOTP(timestamp) {
-  if (!currentTotp) {
-    throw new Error("TOTP not initialized");
-  }
-  return currentTotp.generate({ timestamp });
-}
-
-function userAgent() {
-  return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36";
 }
 
 export { initializeTOTP };
