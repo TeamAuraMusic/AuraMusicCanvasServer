@@ -103,16 +103,10 @@ Use the included `Dockerfile`. Render will auto-detect it if you choose Docker e
 
 ---
 
-## Notes
-
-> I'm developing this project entirely on my phone, without a PC or laptop. Also, I'm still learning — so feel free to send pull requests or suggestions if something looks off!
-
----
-
 ## Reference
 
 Shoutout to this helpful repo that inspired parts of this:
-https://github.com/bartleyg/my-spotify-canvas
+https://github.com/Paxsenix0/Spotify-Canvas-API
 
 ---
 
