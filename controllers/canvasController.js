@@ -40,11 +40,6 @@ function scoreCandidate(track, song, artist, durationMs) {
     const artistsNorm = (track.artists || []).map(a => norm(a.name));
     if (artistsNorm.some(a => a === nArtist)) score += 3;
     else if (artistsNorm.some(a => a.includes(nArtist) || nArtist.includes(a))) score += 1;
-    else {
-      // No artist match when artist is provided - penalize significantly
-      // This prevents wrong artist canvases from being selected
-      score -= 5;
-    }
   }
 
   if (durationMs && track.duration_ms) {
@@ -72,10 +67,23 @@ async function searchTracks(song, artist, album, durationMs, limit = 10) {
   const items = await searchSpotifyTracks(q, limit);
   if (!items.length) return [];
   // Re-rank locally so the BEST candidate is checked for canvases first.
-  return items
+  const scored = items
     .map(t => ({ t, score: scoreCandidate(t, song, artist, durationMs) }))
-    .sort((a, b) => b.score - a.score)
-    .map(x => x.t);
+    .sort((a, b) => b.score - a.score);
+  
+  // When artist is provided, filter out tracks with no artist match
+  // to ensure correct artist canvases are selected
+  if (artist) {
+    const nArtist = norm(artist);
+    const filtered = scored.filter(x => {
+      const artistsNorm = (x.t.artists || []).map(a => norm(a.name));
+      return artistsNorm.some(a => a === nArtist || a.includes(nArtist) || nArtist.includes(a));
+    });
+    // If we have filtered results, use those; otherwise fall back to all results
+    return filtered.length > 0 ? filtered.map(x => x.t) : scored.map(x => x.t);
+  }
+  
+  return scored.map(x => x.t);
 }
 
 function firstCanvasUrl(data) {
