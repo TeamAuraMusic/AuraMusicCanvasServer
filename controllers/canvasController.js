@@ -40,6 +40,11 @@ function scoreCandidate(track, song, artist, durationMs) {
     const artistsNorm = (track.artists || []).map(a => norm(a.name));
     if (artistsNorm.some(a => a === nArtist)) score += 3;
     else if (artistsNorm.some(a => a.includes(nArtist) || nArtist.includes(a))) score += 1;
+    else {
+      // No artist match when artist is provided - penalize significantly
+      // This prevents wrong artist canvases from being selected
+      score -= 5;
+    }
   }
 
   if (durationMs && track.duration_ms) {
