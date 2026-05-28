@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { getCanvases } from '../services/spotifyCanvasService.js';
 import { getToken } from '../services/spotifyAuthService.js';
+import { searchSpotifyTracks } from '../services/spotifySearchService.js';
 
 // ---------------------------------------------------------------------------
 // In-memory caches. Render free-tier dynos restart often so this is enough for
@@ -50,53 +51,26 @@ function scoreCandidate(track, song, artist, durationMs) {
 }
 
 /**
- * Search the Spotify Web API with the public web-player access token.
+ * Search Spotify for the given (song, artist[, album]) and return candidates
+ * locally re-ranked by how well they match the requested title/artist/duration.
  *
- * The previous implementation used productType=mobile-web-player which works
- * for the internal canvaz endpoint but is rejected by api.spotify.com/v1/search.
- * We explicitly request a "web-player" token (the same one open.spotify.com
- * uses for its search bar) which DOES have search scope.
+ * Resolution goes through the Pathfinder GraphQL endpoint (the same Spotify
+ * web-player itself uses) which is NOT rate-limited per cloud IP the way
+ * api.spotify.com/v1/search is – critical when running on a shared Render
+ * dyno.
  */
 async function searchTracks(song, artist, album, durationMs, limit = 10) {
-  try {
-    const accessToken = await getToken('transport', 'web-player');
-    if (!accessToken) {
-      console.error('[search] No access token returned for productType=web-player');
-      return [];
-    }
-
-    // A simple free-form query consistently beats `field:` filters on Spotify
-    // for messy YT-Music titles like "Title (Remix) feat. X".
-    const q = [song, artist].filter(Boolean).join(' ').trim();
-    if (!q) return [];
-
-    const response = await axios.get('https://api.spotify.com/v1/search', {
-      params: { q, type: 'track', limit, market: 'from_token' },
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Accept': 'application/json',
-      },
-      validateStatus: () => true,
-    });
-
-    if (response.status !== 200) {
-      console.error('[search] non-200', response.status, JSON.stringify(response.data));
-      return [];
-    }
-
-    const items = response.data?.tracks?.items || [];
-    if (!items.length) return [];
-
-    // Re-rank locally so the BEST candidate is checked for canvases first.
-    const scored = items
-      .map(t => ({ t, score: scoreCandidate(t, song, artist, durationMs) }))
-      .sort((a, b) => b.score - a.score)
-      .map(x => x.t);
-    return scored;
-  } catch (err) {
-    console.error('[search] error:', err.response?.status, err.response?.data || err.message);
-    return [];
-  }
+  // A simple free-form query consistently beats `field:` filters on Spotify
+  // for messy YT-Music titles like "Title (Remix) feat. X".
+  const q = [song, artist].filter(Boolean).join(' ').trim();
+  if (!q) return [];
+  const items = await searchSpotifyTracks(q, limit);
+  if (!items.length) return [];
+  // Re-rank locally so the BEST candidate is checked for canvases first.
+  return items
+    .map(t => ({ t, score: scoreCandidate(t, song, artist, durationMs) }))
+    .sort((a, b) => b.score - a.score)
+    .map(x => x.t);
 }
 
 function firstCanvasUrl(data) {
