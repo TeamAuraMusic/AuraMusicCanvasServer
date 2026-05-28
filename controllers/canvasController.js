@@ -92,7 +92,13 @@ async function getCanvasCached(trackId) {
 async function resolveTrackId(song, artist, album, durationMs) {
   const key = lookupKey(song, artist, album);
   const cached = trackIdCache.get(key);
-  if (cached && cached.expiresAt > Date.now()) return cached.trackId;
+  if (cached && cached.expiresAt > Date.now()) {
+    // Cache hit: return the trackId with data from canvasCache
+    const canvasData = canvasCache.get(cached.trackId);
+    if (canvasData && canvasData.expiresAt > Date.now()) {
+      return { trackId: cached.trackId, data: canvasData.data };
+    }
+  }
 
   const tracks = await searchTracks(song, artist, album, durationMs);
   for (const t of tracks) {
