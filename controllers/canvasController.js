@@ -25,8 +25,79 @@ function norm(s) {
     .trim();
 }
 
-function lookupKey(song, artist, album) {
-  return [norm(song), norm(artist), norm(album)].join('\u0001');
+function artistNorm(s) {
+  return norm(s).replace(/^the\s+/, '').trim();
+}
+
+function splitArtistNames(s) {
+  return (s || '')
+    .split(/\s*(?:,|&|\band\b|\bfeat\.?|\bft\.?|\bwith\b)\s*/i)
+    .map(artistNorm)
+    .filter(Boolean);
+}
+
+function tokenSet(s) {
+  return new Set(norm(s).split(' ').filter(t => t.length > 1));
+}
+
+function containsAll(haystack, needles) {
+  for (const needle of needles) {
+    if (!haystack.has(needle)) return false;
+  }
+  return true;
+}
+
+function titleMatches(candidate, query) {
+  const c = norm(candidate);
+  const q = norm(query);
+  if (!c || !q) return false;
+  if (c === q) return true;
+
+  const cTokens = tokenSet(c);
+  const qTokens = tokenSet(q);
+  if (!cTokens.size || !qTokens.size) return false;
+
+  // Avoid broad one-word partial matches. "Home" should not match every
+  // unrelated song title containing the word "home".
+  return qTokens.size > 1 && containsAll(cTokens, qTokens);
+}
+
+function artistNameMatches(candidate, query) {
+  const c = artistNorm(candidate);
+  const q = artistNorm(query);
+  if (!c || !q) return false;
+  if (c === q) return true;
+
+  const cTokens = tokenSet(c);
+  const qTokens = tokenSet(q);
+  if (cTokens.size < 2 || qTokens.size < 2) return false;
+
+  return containsAll(cTokens, qTokens) || containsAll(qTokens, cTokens);
+}
+
+function artistMatches(candidateArtists, requestedArtist) {
+  if (!requestedArtist) return true;
+  const requested = splitArtistNames(requestedArtist);
+  if (!requested.length) return true;
+  const candidates = Array.isArray(candidateArtists)
+    ? candidateArtists.map(a => a?.name || a).filter(Boolean)
+    : splitArtistNames(candidateArtists);
+
+  return candidates.some(candidate =>
+    requested.some(query => artistNameMatches(candidate, query))
+  );
+}
+
+function canvasMatchesArtist(data, requestedArtist) {
+  if (!requestedArtist) return true;
+  const canvasArtists = (data?.canvasesList || [])
+    .map(c => c?.artist?.artistName)
+    .filter(Boolean);
+  return canvasArtists.length === 0 || artistMatches(canvasArtists, requestedArtist);
+}
+
+function lookupKey(song, artist, album, durationMs) {
+  return [norm(song), norm(artist), norm(album), durationMs || ''].join('\u0001');
 }
 
 function scoreCandidate(track, song, artist, durationMs) {
@@ -34,12 +105,10 @@ function scoreCandidate(track, song, artist, durationMs) {
   const nSong = norm(song);
   const nArtist = norm(artist);
   if (nSong && norm(track.name) === nSong) score += 4;
-  else if (nSong && norm(track.name).includes(nSong)) score += 2;
+  else if (nSong && titleMatches(track.name, song)) score += 2;
 
   if (nArtist) {
-    const artistsNorm = (track.artists || []).map(a => norm(a.name));
-    if (artistsNorm.some(a => a === nArtist)) score += 3;
-    else if (artistsNorm.some(a => a.includes(nArtist) || nArtist.includes(a))) score += 1;
+    if (artistMatches(track.artists || [], artist)) score += 3;
   }
 
   if (durationMs && track.duration_ms) {
@@ -48,6 +117,13 @@ function scoreCandidate(track, song, artist, durationMs) {
     else if (diff <= 5_000) score += 1;
   }
   return score;
+}
+
+function isEligibleCandidate(track, song, artist) {
+  if (!track?.id) return false;
+  if (song && !titleMatches(track.name, song)) return false;
+  if (artist && !artistMatches(track.artists || [], artist)) return false;
+  return true;
 }
 
 /**
@@ -68,21 +144,10 @@ async function searchTracks(song, artist, album, durationMs, limit = 10) {
   if (!items.length) return [];
   // Re-rank locally so the BEST candidate is checked for canvases first.
   const scored = items
+    .filter(t => isEligibleCandidate(t, song, artist))
     .map(t => ({ t, score: scoreCandidate(t, song, artist, durationMs) }))
     .sort((a, b) => b.score - a.score);
-  
-  // When artist is provided, filter out tracks with no artist match
-  // to ensure correct artist canvases are selected
-  if (artist) {
-    const nArtist = norm(artist);
-    const filtered = scored.filter(x => {
-      const artistsNorm = (x.t.artists || []).map(a => norm(a.name));
-      return artistsNorm.some(a => a === nArtist || a.includes(nArtist) || nArtist.includes(a));
-    });
-    // If we have filtered results, use those; otherwise fall back to all results
-    return filtered.length > 0 ? filtered.map(x => x.t) : scored.map(x => x.t);
-  }
-  
+
   return scored.map(x => x.t);
 }
 
@@ -103,7 +168,7 @@ async function getCanvasCached(trackId) {
 }
 
 async function resolveTrackId(song, artist, album, durationMs) {
-  const key = lookupKey(song, artist, album);
+  const key = lookupKey(song, artist, album, durationMs);
   const cached = trackIdCache.get(key);
   if (cached && cached.expiresAt > Date.now()) {
     // Cache hit: return the trackId with data from canvasCache
@@ -117,7 +182,7 @@ async function resolveTrackId(song, artist, album, durationMs) {
   for (const t of tracks) {
     if (!t?.id) continue;
     const data = await getCanvasCached(t.id);
-    if (data) {
+    if (data && canvasMatchesArtist(data, artist)) {
       trackIdCache.set(key, { trackId: t.id, expiresAt: Date.now() + POSITIVE_TTL_MS });
       return { trackId: t.id, data };
     }
