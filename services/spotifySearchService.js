@@ -1,36 +1,37 @@
 /**
  * Spotify search service.
  *
- * Uses the standard Spotify Web API at api.spotify.com/v1/search.
+ * Uses spclient.wg.spotify.com/searchview/km/v4 with the same Bearer token
+ * that works for canvas fetches.
  *
- * Why this endpoint:
- *   - It's the official, documented, and stable search API
- *   - The TOTP-based access token from open.spotify.com/api/token is a
- *     standard JWT Bearer token that works with api.spotify.com
- *   - The previous spclient searchview endpoint (km/v4) broke after a
- *     Spotify internal API update (returns 400)
- *   - Unlike the internal spclient endpoints, the standard API doesn't
- *     change without developer notice
+ * Working implementation verified from:
+ *   - ignatij/spotpilot (Go) — searchview with app-platform header
+ *   - stieterd/playlist-generator (Python) — full header set
+ *   - slowdownify README — confirms endpoint is NOT deprecated
  *
- * Rate limiting: the standard API allows ~180 requests/minute per token.
- * Our canvas server only searches when resolving canvas URLs (not on every
- * playback), so we stay well within limits.
+ * Key requirements for the 400 → 200 fix:
+ *   1. app-platform: WebPlayer header (missing in our original code)
+ *   2. catalogue= (empty, NOT "premium")
+ *   3. imageSize parameter
+ *   4. Spotify-App-Version header
  */
 
 import axios from 'axios';
 import { getToken } from './spotifyAuthService.js';
 
-const SEARCH_URL = 'https://api.spotify.com/v1/search';
+const SEARCH_URL_BASE = 'https://spclient.wg.spotify.com/searchview/km/v4/search/';
 
 function normalize(item) {
-  if (!item?.id) return null;
+  const uri = item?.uri;
+  if (!uri || !uri.startsWith('spotify:track:')) return null;
+  const id = uri.split(':').pop();
   return {
-    id: item.id,
-    uri: `spotify:track:${item.id}`,
+    id,
+    uri,
     name: item.name,
-    artists: (item.artists || []).map(a => ({ name: a.name, id: a.id })),
-    duration_ms: item.duration_ms,
-    album: item.album ? { name: item.album.name, id: item.album.id } : null,
+    artists: (item.artists || []).map(a => ({ name: a.name, id: (a.uri || '').split(':').pop() })),
+    duration_ms: item.duration,
+    album: item.album ? { name: item.album.name, id: (item.album.uri || '').split(':').pop() } : null,
   };
 }
 
@@ -48,29 +49,43 @@ export async function searchSpotifyTracks(query, limit = 10) {
       return [];
     }
 
-    const res = await axios.get(SEARCH_URL, {
+    const res = await axios.get(SEARCH_URL_BASE + encodeURIComponent(query.trim()), {
       params: {
-        q: query.trim(),
-        type: 'track',
+        entityVersion: 2,
         limit,
-        market: 'US',
+        imageSize: 'large',
+        catalogue: '',
+        country: 'US',
+        locale: 'en',
+        platform: 'web',
       },
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Accept': 'application/json',
+        'Accept-Language': 'en',
+        'app-platform': 'WebPlayer',
+        'Spotify-App-Version': '1.2.62.318.g83f5768a',
+        'Origin': 'https://open.spotify.com/',
+        'Referer': 'https://open.spotify.com/',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'sec-ch-ua': '"Not A(Brand";v="8", "Chromium";v="131", "Google Chrome";v="131"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"macOS"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-site',
       },
       validateStatus: () => true,
     });
 
-    if (res.status === 200) {
-      const hits = res.data?.tracks?.items || [];
-      return hits.map(normalize).filter(Boolean);
+    if (res.status !== 200) {
+      const bodyPreview = JSON.stringify(res.data).slice(0, 300);
+      console.warn(`[search] non-200 ${res.status}: ${bodyPreview}`);
+      return [];
     }
 
-    // Log details for debugging
-    const bodyPreview = JSON.stringify(res.data).slice(0, 300);
-    console.warn(`[search] api.spotify.com status=${res.status} body=${bodyPreview}`);
-    return [];
+    const hits = res.data?.results?.tracks?.hits || [];
+    return hits.map(normalize).filter(Boolean);
   } catch (err) {
     console.error('[search] error:', err.response?.status, err.response?.data || err.message);
     return [];
