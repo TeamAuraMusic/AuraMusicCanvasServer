@@ -6,6 +6,11 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Startup diagnostics: report whether the Spotify cookie is actually present
+// (length only, never the value) so a bad env config is obvious in the deploy
+// log instead of surfacing later as a 401 from Spotify.
+console.log(`[config] SP_DC ${process.env.SP_DC ? `present (len=${process.env.SP_DC.length})` : 'MISSING - Spotify lookups will 401'}`);
+
 app.use(express.json({ limit: '64kb' }));
 
 // Friendly root so visitors aren't greeted by "Cannot GET /".
