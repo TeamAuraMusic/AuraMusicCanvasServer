@@ -20,4 +20,4 @@ jobs:
           curl -fsS --max-time 120 \
             -o /dev/null \
             -w "HTTP %{http_code} in %{time_total}s\n" \
-            https://auramusiccanvasserver.onrender.com/health
+            https://canvas.auramusic.site/health
