@@ -32,6 +32,34 @@ app.get('/health', (req, res) => {
 
 app.use('/api/canvas', canvasRoutes);
 
-app.listen(PORT, () => {
+// Surface failures as real 5xx instead of a generic HTML error page, so a bad
+// SP_DC shows up as an auth problem rather than looking like "no canvas found".
+app.use((err, req, res, next) => {
+  const status = err?.status || err?.response?.status || 500;
+  console.error(`[error] ${req.method} ${req.originalUrl} -> ${status}:`, err?.message || err);
+  if (res.headersSent) return next(err);
+  res.status(status === 401 || status === 403 ? 502 : status).json({
+    success: false,
+    error: status === 401 || status === 403
+      ? 'Spotify auth failed - SP_DC is missing or expired'
+      : (err?.message || 'Internal error'),
+  });
+});
+
+// Never let a single bad request take the whole service down: on a free dyno a
+// crash fails the Render health check and aborts the deploy with SIGTERM.
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason?.message || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err?.message || err);
+});
+
+const server = app.listen(PORT, () => {
   console.log('Listening on PORT:', PORT);
+});
+
+server.on('error', (err) => {
+  console.error('[server error]', err?.message || err);
+  process.exit(1);
 });
