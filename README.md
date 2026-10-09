@@ -78,7 +78,38 @@ SP_DC=your_sp_dc_cookie_here
 
 ## Deployment
 
-### Render (recommended)
+### Cloudflare Workers (recommended)
+
+The same Express app runs on Cloudflare Workers through `worker.js` and
+`wrangler.jsonc`. Workers never spin down like Render's free dyno, so the
+keep-warm cron and its cold starts become unnecessary.
+
+One-time setup:
+
+```bash
+npx wrangler login
+npx wrangler secret put SP_DC     # paste the same sp_dc cookie value
+npm run deploy                    # first deploy
+```
+
+- **GitHub deploys**: add repository secrets `CLOUDFLARE_API_TOKEN`
+  (token with *Workers Scripts: Edit*) and `CLOUDFLARE_ACCOUNT_ID`, then every
+  push to `main` deploys through `.github/workflows/deploy-cloudflare.yml`.
+- **Custom domain**: once the `auramusic.site` zone is in your Cloudflare
+  account, attach `canvas.auramusic.site` to the Worker (Workers → your Worker →
+  Custom Domains, or uncomment the `routes` entry in `wrangler.jsonc` and
+  redeploy). Until then the Worker answers on its `*.workers.dev` URL.
+- After DNS points at Cloudflare, delete `.github/workflows/keep-warm.yml` —
+  it only exists to keep the Render free plan awake.
+
+Local Worker development uses `.dev.vars` (gitignored) instead of `.env`:
+
+```bash
+cp .env .dev.vars
+npm run dev:worker
+```
+
+### Render (legacy)
 
 1. Fork or use this repo directly on Render.
 2. Create a new **Web Service** connected to this GitHub repo.

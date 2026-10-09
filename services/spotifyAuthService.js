@@ -2,7 +2,14 @@ import axios from "axios";
 import * as OTPAuth from "otpauth";
 import dotenv from "dotenv";
 
-dotenv.config();
+// Node loads SP_DC from .env. On Cloudflare Workers there is no .env file and
+// the secret arrives through process.env bindings instead, so a failure here
+// is expected and must not take the Worker's module graph down.
+try {
+  dotenv.config();
+} catch {
+  /* Workers runtime: env comes from wrangler secrets/vars */
+}
 
 const SP_DC = process.env.SP_DC;
 

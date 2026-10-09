@@ -10,7 +10,9 @@
 
 var jspb = require('google-protobuf');
 var goog = jspb;
-var global = Function('return this')();
+// Was Function('return this')(); Workers forbids code generation from
+// strings, and globalThis is the same object in Node and workerd.
+var global = globalThis;
 
 goog.exportSymbol('proto.CanvasRequest', null, global);
 goog.exportSymbol('proto.CanvasRequest.Track', null, global);

@@ -142,3 +142,7 @@ fabric.properties
 .DS_Store
 .parcel-cache
 .vscode
+
+# Cloudflare Wrangler local secrets and cache
+.dev.vars
+.wrangler/
