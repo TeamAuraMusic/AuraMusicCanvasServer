@@ -7,6 +7,6 @@
   "observability": { "enabled": true },
   "routes": [{ "pattern": "canvas.auramusic.site", "custom_domain": true }],
   "kv_namespaces": [
-    { "binding": "CANVAS_CACHE", "id": "PLACEHOLDER_KV_ID", "preview_id": "PLACEHOLDER_KV_PREVIEW_ID" }
+    { "binding": "CANVAS_CACHE", "id": "b9137a18f6fc4861b6f41b928b4631f1", "preview_id": "4f0771dc17a844cdba5f0650e44e4616" }
   ]
 }
