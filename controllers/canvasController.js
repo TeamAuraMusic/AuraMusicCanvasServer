@@ -3,17 +3,39 @@ import { getCanvases } from '../services/spotifyCanvasService.js';
 import { getToken } from '../services/spotifyAuthService.js';
 import { searchSpotifyTracks } from '../services/spotifySearchService.js';
 
+// KV-backed cache (Cloudflare Workers + local fallback)
 // ---------------------------------------------------------------------------
-// In-memory caches. Render free-tier dynos restart often so this is enough for
-// burst traffic; not a substitute for a real KV store.
-// ---------------------------------------------------------------------------
-const POSITIVE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-const NEGATIVE_TTL_MS = 60 * 60 * 1000;      // 1h
+const POSITIVE_TTL_SEC = 24 * 60 * 60; // 24h
+const NEGATIVE_TTL_SEC = 60 * 60;      // 1h
+const POSITIVE_TTL_MS = POSITIVE_TTL_SEC * 1000;
+const NEGATIVE_TTL_MS = NEGATIVE_TTL_SEC * 1000;
+
+const KV = globalThis.CANVAS_CACHE || globalThis.__ENV?.CANVAS_CACHE;
 
 // key -> { trackId, expiresAt }
-const trackIdCache = new Map();
+const trackIdCacheMem = new Map();
 // trackId -> { data | null, expiresAt }
-const canvasCache = new Map();
+const canvasCacheMem = new Map();
+
+async function kvGet(key) {
+  if (!KV || typeof KV.get !== 'function') return null;
+  try {
+    const val = await KV.get(key);
+    return val ? JSON.parse(val) : null;
+  } catch (e) {
+    console.warn('[kv] get failed:', e?.message);
+    return null;
+  }
+}
+
+async function kvSet(key, value, ttlSec) {
+  if (!KV || typeof KV.put !== 'function') return;
+  try {
+    await KV.put(key, JSON.stringify(value), ttlSec ? { expirationTtl: ttlSec } : undefined);
+  } catch (e) {
+    console.warn('[kv] set failed:', e?.message);
+  }
+}
 
 function norm(s) {
   return (s || '')
@@ -156,25 +178,40 @@ function firstCanvasUrl(data) {
 }
 
 async function getCanvasCached(trackId) {
-  const cached = canvasCache.get(trackId);
-  if (cached && cached.expiresAt > Date.now()) return cached.data;
+  const k = `canvas:${trackId}`;
+  const mem = canvasCacheMem.get(trackId);
+  if (mem && mem.expiresAt > Date.now()) return mem.data;
+  const kv = await kvGet(k);
+  if (kv && kv.expiresAt > Date.now()) {
+    canvasCacheMem.set(trackId, kv);
+    return kv.data;
+  }
   const data = await getCanvases(`spotify:track:${trackId}`);
   const has = data && data.canvasesList && data.canvasesList.length > 0;
-  canvasCache.set(trackId, {
-    data: has ? data : null,
-    expiresAt: Date.now() + (has ? POSITIVE_TTL_MS : NEGATIVE_TTL_MS),
-  });
+  const val = { data: has ? data : null, expiresAt: Date.now() + (has ? POSITIVE_TTL_MS : NEGATIVE_TTL_MS) };
+  canvasCacheMem.set(trackId, val);
+  await kvSet(k, val, has ? POSITIVE_TTL_SEC : NEGATIVE_TTL_SEC);
   return has ? data : null;
 }
 
 async function resolveTrackId(song, artist, album, durationMs) {
   const key = lookupKey(song, artist, album, durationMs);
-  const cached = trackIdCache.get(key);
-  if (cached && cached.expiresAt > Date.now()) {
-    // Cache hit: return the trackId with data from canvasCache
-    const canvasData = canvasCache.get(cached.trackId);
-    if (canvasData && canvasData.expiresAt > Date.now()) {
-      return { trackId: cached.trackId, data: canvasData.data };
+  const cachedMem = trackIdCacheMem.get(key);
+  if (cachedMem && cachedMem.expiresAt > Date.now()) {
+    const c = canvasCacheMem.get(cachedMem.trackId);
+    if (c && c.expiresAt > Date.now()) {
+      return { trackId: cachedMem.trackId, data: c.data };
+    }
+  }
+  const cachedKv = await kvGet(`tid:${key}`);
+  if (cachedKv && cachedKv.expiresAt > Date.now()) {
+    trackIdCacheMem.set(key, cachedKv);
+    if (cachedKv.trackId) {
+      const ckv = await kvGet(`canvas:${cachedKv.trackId}`);
+      if (ckv && ckv.expiresAt > Date.now()) {
+        canvasCacheMem.set(cachedKv.trackId, ckv);
+        return { trackId: cachedKv.trackId, data: ckv.data };
+      }
     }
   }
 
@@ -183,11 +220,15 @@ async function resolveTrackId(song, artist, album, durationMs) {
     if (!t?.id) continue;
     const data = await getCanvasCached(t.id);
     if (data && canvasMatchesArtist(data, artist)) {
-      trackIdCache.set(key, { trackId: t.id, expiresAt: Date.now() + POSITIVE_TTL_MS });
+      const tidv = { trackId: t.id, expiresAt: Date.now() + POSITIVE_TTL_MS };
+      trackIdCacheMem.set(key, tidv);
+      await kvSet(`tid:${key}`, tidv, POSITIVE_TTL_SEC);
       return { trackId: t.id, data };
     }
   }
-  trackIdCache.set(key, { trackId: null, expiresAt: Date.now() + NEGATIVE_TTL_MS });
+  const tidn = { trackId: null, expiresAt: Date.now() + NEGATIVE_TTL_MS };
+  trackIdCacheMem.set(key, tidn);
+  await kvSet(`tid:${key}`, tidn, NEGATIVE_TTL_SEC);
   return null;
 }
 

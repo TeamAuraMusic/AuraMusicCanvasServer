@@ -2,15 +2,11 @@
   "name": "auramusic-canvas-server",
   "main": "worker.js",
   "compatibility_date": "2026-10-09",
-  // nodejs_compat supplies Express's node:http server, process.env (SP_DC
-  // secret) and Buffer. It is default-on for this compatibility date; it is
-  // listed explicitly so the requirement stays obvious if the date moves.
   "compatibility_flags": ["nodejs_compat"],
-  // Keep serving on auramusic-canvas-server.maxstream123.workers.dev alongside
-  // the custom domain (adding a custom_domain without this disables it).
   "workers_dev": true,
   "observability": { "enabled": true },
-  // Production hostname: canvas.auramusic.site on the auramusic.site zone in
-  // this account. Goes live once the zone's nameservers are set at the registrar.
-  "routes": [{ "pattern": "canvas.auramusic.site", "custom_domain": true }]
+  "routes": [{ "pattern": "canvas.auramusic.site", "custom_domain": true }],
+  "kv_namespaces": [
+    { "binding": "CANVAS_CACHE", "id": "PLACEHOLDER_KV_ID", "preview_id": "PLACEHOLDER_KV_PREVIEW_ID" }
+  ]
 }

@@ -11,7 +11,7 @@ try {
   /* Workers runtime: env comes from wrangler secrets/vars */
 }
 
-const SP_DC = process.env.SP_DC;
+const SP_DC = process.env.SP_DC || globalThis.__ENV?.SP_DC || globalThis.SP_DC;
 
 // Latest known working secrets (as of May 2026)
 // Update this block when Spotify rotates again

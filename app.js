@@ -4,7 +4,8 @@ import canvasRoutes from './routes/canvasRoutes.js';
 // Startup diagnostics: report whether the Spotify cookie is actually present
 // (length only, never the value) so a bad env config is obvious in the deploy
 // log instead of surfacing later as a 401 from Spotify.
-console.log(`[config] SP_DC ${process.env.SP_DC ? `present (len=${process.env.SP_DC.length})` : 'MISSING - Spotify lookups will 401'}`);
+const spDcEnv = process.env.SP_DC || globalThis.__ENV?.SP_DC;
+console.log(`[config] SP_DC ${spDcEnv ? `present (len=${spDcEnv.length})` : 'MISSING - Spotify lookups will 401'}`);
 
 const app = express();
 
