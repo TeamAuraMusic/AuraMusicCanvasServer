@@ -10,17 +10,22 @@ const NEGATIVE_TTL_SEC = 60 * 60;      // 1h
 const POSITIVE_TTL_MS = POSITIVE_TTL_SEC * 1000;
 const NEGATIVE_TTL_MS = NEGATIVE_TTL_SEC * 1000;
 
-const KV = globalThis.CANVAS_CACHE || globalThis.__ENV?.CANVAS_CACHE;
-
 // key -> { trackId, expiresAt }
 const trackIdCacheMem = new Map();
 // trackId -> { data | null, expiresAt }
 const canvasCacheMem = new Map();
 
+// The binding only exists once a request has arrived, which is well after this
+// module was imported - so it is resolved per call, never captured at load time.
+function kv() {
+  return globalThis.CANVAS_CACHE || globalThis.__ENV?.CANVAS_CACHE || null;
+}
+
 async function kvGet(key) {
-  if (!KV || typeof KV.get !== 'function') return null;
+  const store = kv();
+  if (!store || typeof store.get !== 'function') return null;
   try {
-    const val = await KV.get(key);
+    const val = await store.get(key);
     return val ? JSON.parse(val) : null;
   } catch (e) {
     console.warn('[kv] get failed:', e?.message);
@@ -29,9 +34,10 @@ async function kvGet(key) {
 }
 
 async function kvSet(key, value, ttlSec) {
-  if (!KV || typeof KV.put !== 'function') return;
+  const store = kv();
+  if (!store || typeof store.put !== 'function') return;
   try {
-    await KV.put(key, JSON.stringify(value), ttlSec ? { expirationTtl: ttlSec } : undefined);
+    await store.put(key, JSON.stringify(value), ttlSec ? { expirationTtl: ttlSec } : undefined);
   } catch (e) {
     console.warn('[kv] set failed:', e?.message);
   }
@@ -188,6 +194,10 @@ async function getCanvasCached(trackId) {
   }
   const data = await getCanvases(`spotify:track:${trackId}`);
   const has = data && data.canvasesList && data.canvasesList.length > 0;
+  // A null here means the request itself failed (auth, network), not that the track
+  // has no canvas - caching that would blank the track everywhere for an hour after
+  // a single Spotify hiccup.
+  if (data === null) return null;
   const val = { data: has ? data : null, expiresAt: Date.now() + (has ? POSITIVE_TTL_MS : NEGATIVE_TTL_MS) };
   canvasCacheMem.set(trackId, val);
   await kvSet(k, val, has ? POSITIVE_TTL_SEC : NEGATIVE_TTL_SEC);

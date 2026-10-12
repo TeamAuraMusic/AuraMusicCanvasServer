@@ -11,7 +11,14 @@ try {
   /* Workers runtime: env comes from wrangler secrets/vars */
 }
 
-const SP_DC = process.env.SP_DC || globalThis.__ENV?.SP_DC || globalThis.SP_DC;
+// Read the cookie per use rather than capturing it at import time: on Workers the
+// module graph is evaluated before the first request arrives, so a value captured
+// at load is empty and every Spotify call 401s. nodejs_compat normally has the
+// secret in process.env already; the globals are the fallback for the case where it
+// is delivered with the request instead.
+function spDc() {
+  return process.env.SP_DC || globalThis.__ENV?.SP_DC || globalThis.SP_DC || null;
+}
 
 // Latest known working secrets (as of May 2026)
 // Update this block when Spotify rotates again
@@ -81,7 +88,7 @@ export async function getToken(reason = "init", productType = "mobile-web-player
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       'Origin': 'https://open.spotify.com/',
       'Referer': 'https://open.spotify.com/',
-      'Cookie': `sp_dc=${SP_DC}`,
+      'Cookie': `sp_dc=${spDc()}`,
     },
   });
 
@@ -98,7 +105,7 @@ async function getServerTime() {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Origin': 'https://open.spotify.com/',
         'Referer': 'https://open.spotify.com/',
-        'Cookie': `sp_dc=${SP_DC}`,
+        'Cookie': `sp_dc=${spDc()}`,
       },
     });
     const time = Number(data.serverTime);
