@@ -1,5 +1,5 @@
 {
-  "name": "auramusic-canvas-server",
+  "name": "auramusiccanvasserver",
   "main": "worker.js",
   "compatibility_date": "2026-10-09",
   "compatibility_flags": ["nodejs_compat"],
