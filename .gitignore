@@ -69,6 +69,7 @@ typings/
 !.vscode/launch.json
 !.vscode/extensions.json
 .history
+.qoder
 
 ### WebStorm ###
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio and Webstorm

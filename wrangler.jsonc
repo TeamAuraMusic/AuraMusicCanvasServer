@@ -1,12 +1,25 @@
 {
-  "name": "auramusiccanvasserver",
-  "main": "worker.js",
-  "compatibility_date": "2026-10-09",
-  "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": true,
-  "observability": { "enabled": true },
-  "routes": [{ "pattern": "canvas.auramusic.site", "custom_domain": true }],
-  "kv_namespaces": [
-    { "binding": "CANVAS_CACHE", "id": "b9137a18f6fc4861b6f41b928b4631f1", "preview_id": "4f0771dc17a844cdba5f0650e44e4616" }
-  ]
+	"name": "auramusiccanvasserver",
+	"account_id": "e6e23b67c48b4d1e98d56b1559d0ebfc",
+	"main": "worker.js",
+	"compatibility_date": "2026-10-09",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"workers_dev": true,
+	"observability": {
+		"enabled": true
+	},
+	"routes": [
+		{
+			"pattern": "canvas.auramusic.site",
+			"custom_domain": true
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "CANVAS_CACHE",
+			"id": "f549198a5a084006a14dbd087f62e1af"
+		}
+	]
 }
